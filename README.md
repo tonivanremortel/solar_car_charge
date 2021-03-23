@@ -51,10 +51,10 @@ As there is no option (yet) to charge the car with the excess solar energy only,
 1. Check the logfile /var/log/wallbox.log for any charging state change.
 
 ## Sample log file info
-2021-03-23 16:29:02,974 -- Wallbox: 6 A - P1: -4200.0 W - Minimal: -3450 W
-2021-03-23 16:29:03,320 Sufficient power: -4200.0 W. Start charging at 6 A
-2021-03-23 16:30:03,279 -- Wallbox: 6 A - P1: -4170.0 W - Minimal: -3450 W
-2021-03-23 16:30:03,642 Sufficient power: -4170.0 W. Start charging at 6 A
-2021-03-23 16:31:03,486 -- Wallbox: 6 A - P1: -2070.0 W - Minimal: -3450 W
-2021-03-23 16:31:03,854 Pause charging, not enough power: -2070.0 W - 6 A
+> 2021-03-23 16:29:02,974 -- Wallbox: 6 A - P1: -4200.0 W - Minimal: -3450 W
+> 2021-03-23 16:29:03,320 Sufficient power: -4200.0 W. Start charging at 6 A
+> 2021-03-23 16:30:03,279 -- Wallbox: 6 A - P1: -4170.0 W - Minimal: -3450 W
+> 2021-03-23 16:30:03,642 Sufficient power: -4170.0 W. Start charging at 6 A
+> 2021-03-23 16:31:03,486 -- Wallbox: 6 A - P1: -2070.0 W - Minimal: -3450 W
+> 2021-03-23 16:31:03,854 Pause charging, not enough power: -2070.0 W - 6 A
 
