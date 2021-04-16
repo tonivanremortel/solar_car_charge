@@ -92,11 +92,24 @@ p1 = p1_import_diff - p1_export_diff
 # remote_action = 1 --> charging running
 # remote_action = 2 --> charging paused
 wallbox_current_amp = chargerStatus['config_data']['max_charging_current']
-wallbox_state = chargerStatus['config_data']['remote_action']
+wallbox_desc = chargerStatus['status_description']
+#wallbox_state = chargerStatus['config_data']['remote_action']
+if(wallbox_desc == 'Ready'):
+    # No car connected
+    wallbox_state = 0
+elif(wallbox_desc == 'Paused by user'):
+    # Paused by us
+    wallbox_state = 0
+elif(wallbox_desc == 'Charging'):
+    # Charging
+    wallbox_state = 1
+else:
+    wallbox_state = 0
 
-logging.info('-- Wallbox: %s A - P1: %s W - Minimal: %s W', wallbox_current_amp, p1, minimal_kwh_to_start_charging) 
+logging.info('-- Wallbox[%s]: %s A - P1: %s W - Minimal: %s W', wallbox_state, wallbox_current_amp, p1, minimal_kwh_to_start_charging) 
 
-if(wallbox_state == 0): # or wallbox_state == 2):
+# If we are not charging, we only look at P1
+if(wallbox_state == 0):
     virtual_p1 = p1
     if( virtual_p1 < minimal_kwh_to_start_charging ):
         wallbox_new_amp = define_amp(virtual_p1)
