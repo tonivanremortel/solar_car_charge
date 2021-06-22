@@ -4,6 +4,8 @@ import mysql.connector
 import logging
 import math
 import configparser
+import requests
+import time
 
 settings_ini = "/usr/share/solar_car_charge/settings.ini"
 
@@ -20,6 +22,11 @@ db_user = config['mysql']['user']
 db_pass = config['mysql']['pass']
 db_host = config['mysql']['host']
 db_db   = config['mysql']['database']
+
+# EmonCMS
+emon_host = config['emoncms']['host']
+emon_node = config['emoncms']['node']
+emon_api  = config['emoncms']['apikey']
 
 # Logging
 logging.basicConfig(filename='/var/log/wallbox.log', level=logging.INFO, format='%(asctime)s %(message)s')
@@ -55,9 +62,17 @@ def define_amp(power):
         new_amp = math.floor(abs_power/690)
         if ( new_amp < 6 ):
             return 6
+        elif ( new_amp >= 16 ):
+            return 16
         else:
             return new_amp
 
+def send_emoncms(new_power,status,old_power,p1):
+    emon_url = 'http://' + emon_host + '/emoncms/input/post.json?node=' + emon_node + '&fulljson={"wallbox_amp":' + str(new_power) + ',"wallbox_state":' + str(status) + ',"wallbox_old_amp":' + str(old_power) + ',"virtual_p1":' + str(p1) + '}&apikey=' + emon_api
+    e = requests.get(emon_url)
+
+# Sleep 10 seconds so we have the data from P1 which is read at the same time
+time.sleep(10)
 
 # Get the state of the charger
 # Authenticate with the credentials above
@@ -100,19 +115,23 @@ if(wallbox_desc == 'Ready'):
 elif(wallbox_desc == 'Paused by user'):
     # Paused by us
     wallbox_state = 0
+elif(wallbox_desc == 'Connected: waiting for car demand'):
+    # Car full
+    wallbox_state = 2
 elif(wallbox_desc == 'Charging'):
     # Charging
     wallbox_state = 1
 else:
     wallbox_state = 0
 
-logging.info('-- Wallbox[%s]: %s A - P1: %s W - Minimal: %s W', wallbox_state, wallbox_current_amp, p1, minimal_kwh_to_start_charging) 
+logging.info('-- Wallbox[%s]: %s A - P1: %s W - Minimal: %s W - %s', wallbox_state, wallbox_current_amp, p1, minimal_kwh_to_start_charging, wallbox_desc) 
 
 # If we are not charging, we only look at P1
 if(wallbox_state == 0):
     virtual_p1 = p1
     if( virtual_p1 < minimal_kwh_to_start_charging ):
         wallbox_new_amp = define_amp(virtual_p1)
+        send_emoncms(wallbox_new_amp, 1, wallbox_current_amp, virtual_p1)
         try:
             w.setMaxChargingCurrent(chargerId,wallbox_new_amp)
             w.resumeChargingSession(chargerId)
@@ -121,16 +140,32 @@ if(wallbox_state == 0):
             logging.info('Sufficient power: %s W. Start charging at %s A', virtual_p1, wallbox_new_amp)
     else:
         wallbox_new_amp = 6
+        send_emoncms(wallbox_new_amp, 0, wallbox_current_amp, virtual_p1)
         try:
             w.setMaxChargingCurrent(chargerId,wallbox_new_amp)
             w.pauseChargingSession(chargerId)
             logging.info('Pause charging, not enough power: %s W - %s A', virtual_p1, wallbox_new_amp)
         except:
             logging.info('Pause charging, not enough power: %s W - %s A', virtual_p1, wallbox_new_amp)
+elif(wallbox_state == 2):
+    # Car is full, so pause and set to minimum amps
+    virtual_p1 = p1
+    wallbox_new_amp = 6
+    send_emoncms(wallbox_new_amp, 0, wallbox_current_amp, virtual_p1)
+    try:
+        w.setMaxChargingCurrent(chargerId,wallbox_new_amp)
+        w.pauseChargingSession(chargerId)
+        logging.info('Pause charging, car is full: %s W - %s A', virtual_p1, wallbox_new_amp)
+    except:
+        logging.info('Pause charging, car is full: %s W - %s A', virtual_p1, wallbox_new_amp)
+# Else we are charging, so we use P1 and distract the current charging power to get a virtual P1
+# Issue: when the Wallbox is reporting it is charging, but it is not, this logic creates a jojo effect
+# So ... how to know the real charging speed?
 else:
     virtual_p1 = p1 - wallbox_current_amp*690
     if( virtual_p1 < minimal_kwh_to_start_charging ):
         wallbox_new_amp = define_amp(virtual_p1)
+        send_emoncms(wallbox_new_amp, 1, wallbox_current_amp, virtual_p1)
         try:
             w.setMaxChargingCurrent(chargerId,wallbox_new_amp)
             logging.info('More power: %s W. Update charging to %s A', virtual_p1, wallbox_new_amp)
@@ -138,6 +173,7 @@ else:
             logging.info('More power: %s W. Update charging to %s A', virtual_p1, wallbox_new_amp)
     else:
         wallbox_new_amp = 6
+        send_emoncms(wallbox_new_amp, 0, wallbox_current_amp, virtual_p1)
         try:
             w.setMaxChargingCurrent(chargerId,wallbox_new_amp)
             w.pauseChargingSession(chargerId)
